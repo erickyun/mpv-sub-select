@@ -14,26 +14,26 @@ local opt = require 'mp.options'
 
 local o = {
     --forcibly enable the script regardless of the sid option
-    force_enable = false,
+    force_enable = true,
 
     --selects subtitles synchronously during the preloaded hook, which has better
     --compatability with other scripts and options
     --this requires that the script predict what the default audio track will be,
     --so this can be wrong on some rare occasions
     --disabling this will switch the subtitle track after playback starts
-    preload = true,
+    preload = false,
 
     --experimental audio track selection based on the preferences.
     --this overrides force_prection and detect_incorrect_predictions.
-    select_audio = false,
+    select_audio = true,
 
     --remove any potential prediction failures by forcibly selecting whichever
     --audio track was predicted
-    force_prediction = false,
+    force_prediction = true,
 
     --detect when a prediction is wrong and re-check the subtitles
     --this is automatically disabled if `force_prediction` is enabled
-    detect_incorrect_predictions = true,
+    detect_incorrect_predictions = false,
 
     --observe audio switches and reselect the subtitles when alang changes
     observe_audio_switches = false,
@@ -49,7 +49,7 @@ opt.read_options(o, "sub_select")
 
 local prefs
 
-local ENABLED = o.force_enable or true
+local ENABLED = o.force_enable or mp.get_property("options/sid", "auto") == "auto"
 local latest_audio = {}
 local alang_priority = mp.get_property_native("alang", {})
 local audio_tracks = {}
@@ -358,10 +358,9 @@ end
 local track_auto_selection = true
 mp.observe_property("track-auto-selection", "bool", function(_,b) track_auto_selection = b end)
 
-local function continue_script(initial_file_load)
+local function continue_script()
     if #sub_tracks < 1 then return false end
     if not ENABLED then return false end
-    if initial_file_load and mp.get_property('sid') ~= 'auto' then return false end
     if not track_auto_selection then return false end
     return true
 end
@@ -393,13 +392,6 @@ local function read_track_list()
     end
 end
 
-local function reset_track_ids()
-    if not continue_script() then return end
-    mp.set_property('sid', 'auto')
-    if o.select_audio then mp.set_property('aid', 'auto') end
-end
-
-mp.add_hook('on_unload', 1000, reset_track_ids)
 
 --setup the audio and subtitle track lists when a new file is loaded
 mp.add_hook('on_preloaded', 25, read_track_list)
@@ -407,7 +399,7 @@ mp.add_hook('on_preloaded', 25, read_track_list)
 --events for file loading
 if o.preload then
     mp.add_hook('on_preloaded', 30, function()
-        if not continue_script(true) then return end
+        if not continue_script() then return end
         preload()
     end)
 
@@ -417,7 +409,7 @@ if o.preload then
     end
 else
     mp.register_event("file-loaded", function()
-        if not continue_script(true) then return end
+        if not continue_script() then return end
         async_load()
     end)
 end
